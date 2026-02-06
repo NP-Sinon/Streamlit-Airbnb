@@ -4,30 +4,22 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 
-# =========================
-# CONFIGURACIÓ
-# =========================
 st.set_page_config(
     page_title="Monitor Airbnb Barcelona",
     page_icon="🕵️‍♀️",
     layout="wide"
 )
 
-# Mapa de colors amb les claus en Català
 COLOR_MAP = {
-    "Il·legal/Fals": "#EF553B",        # Vermell
-    "Verificat": "#00CC96",            # Verd
-    "Sense Llicència / Exempt": "#636EFA", # Blau
-    "NRA": "#FF9900",                  # Taronja
-    "Desconegut": "#B6B6B6",           # Gris
+    "Il·legal/Fals": "#EF553B",
+    "Verificat": "#00CC96",
+    "Sense Llicència / Exempt": "#636EFA",
+    "NRA": "#FF9900",
+    "Desconegut": "#B6B6B6",
 }
 
-# Ordre per a les llegendes
 LICENSE_ORDER = ["Verificat", "Il·legal/Fals", "NRA", "Sense Llicència / Exempt", "Desconegut"]
 
-# =========================
-# CÀRREGA DE DADES
-# =========================
 @st.cache_data(show_spinner=False)
 def load_data(path: str = "airbnb_barcelona_final.csv") -> pd.DataFrame:
     try:
@@ -35,7 +27,6 @@ def load_data(path: str = "airbnb_barcelona_final.csv") -> pd.DataFrame:
     except FileNotFoundError:
         return pd.DataFrame()
 
-    # Normalitzacions defensives
     needed_cols = [
         "id","name","host_id","host_name",
         "neighbourhood_cleansed","latitude","longitude",
@@ -47,19 +38,16 @@ def load_data(path: str = "airbnb_barcelona_final.csv") -> pd.DataFrame:
         if c not in df.columns:
             df[c] = np.nan
 
-    # 1. Lògica inicial amb noms originals (anglès/dataset)
     if "License_Status" in df.columns:
         mask_nra = df["License_Status"] == "NRA"
         df.loc[mask_nra, "License_Verification"] = "NRA"
 
     df["License_Verification"] = df["License_Verification"].fillna("Unknown")
     
-    # 2. Creació de flags abans de traduir (per seguretat lògica)
     df["is_illegal"] = (df["License_Verification"] == "Ilegal/Fake").astype(int)
     df["is_nra"] = (df["License_Verification"] == "NRA").astype(int)
     df["is_verified"] = (df["License_Verification"] == "Verified").astype(int)
 
-    # 3. Traducció de valors al Català per a la UI
     translation_map = {
         "Ilegal/Fake": "Il·legal/Fals",
         "Verified": "Verificat",
@@ -69,26 +57,21 @@ def load_data(path: str = "airbnb_barcelona_final.csv") -> pd.DataFrame:
     }
     df["License_Verification"] = df["License_Verification"].map(translation_map).fillna("Desconegut")
 
-    # Assegurar consistència amb COLOR_MAP
     df.loc[~df["License_Verification"].isin(COLOR_MAP.keys()), "License_Verification"] = "Desconegut"
 
-    # Omplir altres nuls
     df["neighbourhood_cleansed"] = df["neighbourhood_cleansed"].fillna("Desconegut")
     df["property_type"] = df["property_type"].fillna("Desconegut")
     df["room_type"] = df["room_type"].fillna("Desconegut")
     df["host_name"] = df["host_name"].fillna("Desconegut")
 
-    # Numèrics
     df["price_cleaned"] = pd.to_numeric(df["price_cleaned"], errors="coerce")
     df["minimum_nights"] = pd.to_numeric(df["minimum_nights"], errors="coerce")
     df["latitude"] = pd.to_numeric(df["latitude"], errors="coerce")
     df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
 
-    # ID a int
     df["id"] = pd.to_numeric(df["id"], errors="coerce").astype("Int64")
     df["host_id"] = pd.to_numeric(df["host_id"], errors="coerce").astype("Int64")
 
-    # Recull de preus per visualització (clip outlier)
     if df["price_cleaned"].notna().any():
         upper_limit = df["price_cleaned"].quantile(0.99)
         df["price_for_viz"] = df["price_cleaned"].clip(lower=0, upper=upper_limit)
@@ -99,7 +82,6 @@ def load_data(path: str = "airbnb_barcelona_final.csv") -> pd.DataFrame:
 
 
 def extract_room_id(url_or_id: str):
-    """Extreu l'ID numèric d'una URL o string."""
     if url_or_id is None:
         return None
     s = str(url_or_id).strip()
@@ -145,7 +127,6 @@ def apply_filters(df: pd.DataFrame,
 def metrics_block(df_all: pd.DataFrame, df_f: pd.DataFrame):
     total = len(df_f)
     
-    # Càlculs sobre el filtrat
     ilegal = int((df_f["License_Verification"] == "Il·legal/Fals").sum())
     nra = int((df_f["License_Verification"] == "NRA").sum())
     verified = int((df_f["License_Verification"] == "Verificat").sum())
@@ -153,7 +134,6 @@ def metrics_block(df_all: pd.DataFrame, df_f: pd.DataFrame):
     
     pct_ilegal = (ilegal / total * 100) if total else 0.0
 
-    # Global (tot el dataset)
     total_all = len(df_all)
     ilegal_all = int((df_all["License_Verification"] == "Il·legal/Fals").sum())
     pct_ilegal_all = (ilegal_all / total_all * 100) if total_all else 0.0
@@ -167,29 +147,20 @@ def metrics_block(df_all: pd.DataFrame, df_f: pd.DataFrame):
 
     st.caption(f"Mitjana global d'Il·legals/Falsos: **{pct_ilegal_all:.1f}%** (sobre {total_all:,} anuncis totals).")
 
-
-# =========================
-# APP PRINCIPAL
-# =========================
 st.title("🏙️ Barcelona Airbnb: Monitor de Legalitat")
 st.markdown(
     "Quadre de comandament interactiu per **explorar llicències**, detectar **possibles il·legals (i NRA)** i entendre "
     "la distribució per **barris**, **amfitrions** i **preus**."
 )
 
-# Càrrega
 df = load_data()
 if df.empty:
     st.error("⚠️ No s'ha trobat l'arxiu `airbnb_barcelona_final.csv` o està buit.")
     st.stop()
 
-# =========================
-# SIDEBAR: INSPECTOR + FILTRES
-# =========================
 st.sidebar.header("🕵️‍♀️ Inspector de Llicències")
 st.sidebar.markdown("Introdueix una **URL** o un **ID** d'Airbnb per cercar-lo.")
 
-# --- CORRECCIÓ: FORMULARI PER EVITAR RE-CARREGA CONSTANT ---
 with st.sidebar.form("inspector_form"):
     query_input = st.text_input("URL o ID", placeholder="https://www.airbnb.com/rooms/18674 o 18674")
     search_submitted = st.form_submit_button("Cercar")
@@ -198,9 +169,7 @@ if search_submitted and query_input:
     room_id = extract_room_id(query_input)
     match = pd.DataFrame()
     
-    # 1) match exacte URL
     match = df[df["listing_url"] == query_input]
-    # 2) si no, per id
     if match.empty and room_id is not None:
         match = df[df["id"] == room_id]
 
@@ -210,7 +179,6 @@ if search_submitted and query_input:
         estado = row["License_Verification"]
         barrio = row["neighbourhood_cleansed"]
 
-        # stats del barri
         df_b = df[df["neighbourhood_cleansed"] == barrio]
         pct_b = (df_b["License_Verification"].eq("Il·legal/Fals").mean() * 100) if len(df_b) else 0.0
         pct_all = df["License_Verification"].eq("Il·legal/Fals").mean() * 100
@@ -239,7 +207,6 @@ if search_submitted and query_input:
 st.sidebar.markdown("---")
 st.sidebar.header("🎛️ Filtres globals")
 
-# Opcions
 barrios_all = sorted(df["neighbourhood_cleansed"].dropna().unique().tolist())
 room_types_all = sorted(df["room_type"].dropna().unique().tolist())
 property_types_all = sorted(df["property_type"].dropna().unique().tolist())
@@ -251,7 +218,6 @@ room_types = st.sidebar.multiselect("Tipus d'habitació", options=room_types_all
 property_types = st.sidebar.multiselect("Tipus de propietat", options=property_types_all, default=[])
 verifs = st.sidebar.multiselect("Estat de llicència", options=verifs_all, default=verifs_all)
 
-# Rangs
 price_min = float(np.nanmin(df["price_cleaned"])) if df["price_cleaned"].notna().any() else 0.0
 price_max = float(np.nanmax(df["price_cleaned"])) if df["price_cleaned"].notna().any() else 1000.0
 p1, p99 = df["price_cleaned"].quantile([0.01, 0.99]).values if df["price_cleaned"].notna().any() else (0, 1000)
@@ -271,30 +237,19 @@ nights_range = st.sidebar.slider("Nits mínimes", min_value=int(n_min), max_valu
 st.sidebar.markdown("---")
 st.sidebar.info("Font: Dataset processat + creuament amb Registre.")
 
-# Aplicar filtres
 df_f = apply_filters(df, barrios, room_types, property_types, verifs, price_range, nights_range)
 
-# =========================
-# MAIN: METRICS
-# =========================
 metrics_block(df, df_f)
 
-# =========================
-# TABS
-# =========================
 tab_overview, tab_map, tab_neigh, tab_hosts, tab_prices, tab_explorer = st.tabs(
     ["📌 Resum", "🗺️ Mapa", "🏘️ Barris", "👤 Amfitrions", "💶 Preus", "🧾 Explorador"]
 )
 
-# -------------------------
-# TAB: RESUM
-# -------------------------
 with tab_overview:
     st.subheader("Distribució general")
     c1, c2 = st.columns([1, 1])
 
     with c1:
-        # Pie chart
         dist = (df_f["License_Verification"]
                 .value_counts(dropna=False)
                 .reindex(LICENSE_ORDER)
@@ -310,7 +265,6 @@ with tab_overview:
         st.plotly_chart(fig, use_container_width=True)
 
     with c2:
-        # Barras stackeadas por room_type
         tmp = (df_f.groupby(["room_type", "License_Verification"])
                .size().reset_index(name="n"))
         total_rt = tmp.groupby("room_type")["n"].transform("sum")
@@ -348,9 +302,6 @@ with tab_overview:
     else:
         st.info("No hi ha dades suficients de `minimum_nights`.")
 
-# -------------------------
-# TAB: MAPA
-# -------------------------
 with tab_map:
     st.subheader("Mapa interactiu")
 
@@ -390,7 +341,6 @@ with tab_map:
                 height=600
             )
         else:
-            # Densitat: Ponderem Il·legal/Fals i NRA més alt
             df_heat = df_map.copy()
             df_heat["weight"] = np.where(df_heat["License_Verification"].isin(["Il·legal/Fals", "NRA"]), 1.0, 0.2)
             figm = px.density_mapbox(
@@ -406,9 +356,6 @@ with tab_map:
         figm.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
         st.plotly_chart(figm, use_container_width=True)
 
-# -------------------------
-# TAB: BARRIS
-# -------------------------
 with tab_neigh:
     st.subheader("Anàlisi per barri")
 
@@ -422,7 +369,6 @@ with tab_neigh:
          )
          .reset_index())
     
-    # Sospitosos = Il·legals + NRA
     g["suspicious_count"] = g["ilegal"] + g["nra"]
     g["pct_suspicious"] = np.where(g["listings"] > 0, g["suspicious_count"] / g["listings"] * 100, 0)
 
@@ -489,9 +435,6 @@ with tab_neigh:
         else:
             st.info("Sense preus vàlids.")
 
-# -------------------------
-# TAB: AMFITRIONS
-# -------------------------
 with tab_hosts:
     st.subheader("Anàlisi per Amfitrió (Host)")
 
@@ -505,7 +448,6 @@ with tab_hosts:
              )
              .reset_index())
     
-    # "Mal actors": Il·legals + NRA
     hosts["bad_count"] = hosts["ilegal"] + hosts["nra"]
     hosts["pct_bad"] = np.where(hosts["listings"] > 0, hosts["bad_count"] / hosts["listings"] * 100, 0)
     hosts = hosts.sort_values(["bad_count", "listings"], ascending=False)
@@ -545,9 +487,6 @@ with tab_hosts:
         hide_index=True
     )
 
-# -------------------------
-# TAB: PREUS
-# -------------------------
 with tab_prices:
     st.subheader("Exploració de preus")
     dfp = df_f[df_f["price_for_viz"].notna()].copy()
@@ -580,9 +519,6 @@ with tab_prices:
             fig2.update_layout(height=420, margin=dict(l=10, r=10, t=30, b=10))
             st.plotly_chart(fig2, use_container_width=True)
 
-# -------------------------
-# TAB: EXPLORADOR
-# -------------------------
 with tab_explorer:
     st.subheader("Explorador de dades")
     c1, c2 = st.columns([1.4, 1])
