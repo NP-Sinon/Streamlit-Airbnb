@@ -26,9 +26,3 @@ El sistema clasifica cada anuncio en 5 categorías:
 3. ⚠️ **NRA:** No consta en el Registro de Turismo de la Generalitat.
 4. 🔵 **Sense Llicència / Exempt:** Situaciones especiales o alquileres de larga estancia.
 5. ⚪ **Desconegut:** Datos insuficientes para verificación.
-
-## 💻 Instalación Local
-
-1. Clona el repositorio:
-   ```bash
-   git clone [https://github.com/tu-usuario/nombre-repo.git](https://github.com/tu-usuario/nombre-repo.git)
