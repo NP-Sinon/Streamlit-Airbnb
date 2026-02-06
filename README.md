@@ -1,5 +1,3 @@
-# Streamlit-Airbnb
-
 # 🏙️ Barcelona Airbnb: Monitor de Legalitat
 
 Este proyecto es un dashboard interactivo desarrollado con **Streamlit** diseñado para auditar la legalidad de los anuncios de Airbnb en Barcelona. La herramienta cruza datos de anuncios públicos con registros de licencias para identificar posibles fraudes, licencias falsas y alojamientos no registrados (NRA).
